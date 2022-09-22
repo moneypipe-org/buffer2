@@ -77,8 +77,8 @@ contract Buffer2 is Initializable {
       uint total_token_received = IERC20(token).balanceOf(address(this)) + total_token_withdrawn[token];
       uint token_payment = total_token_received * amount / 10**12 - token_withdrawn[token][account];
       token_withdrawn[token][account] += token_payment;
-      IERC20(token).safeTransfer(account, token_payment);
       total_token_withdrawn[token] += token_payment;
+      IERC20(token).safeTransfer(account, token_payment);
     }
 
   }
