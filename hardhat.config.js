@@ -53,11 +53,11 @@ module.exports = {
     enabled: true,
   },
   solidity: {
-    version: "0.8.4",
+    version: "0.8.17",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1000,
+        runs: 10000,
       },
     }
   },
@@ -71,6 +71,11 @@ module.exports = {
       gas: 12000000,
       blockGasLimit: 0x1fffffffffffff,
       allowUnlimitedContractSize: true,
+    },
+    goerli: {
+      url: process.env.GOERLI,
+      timeout: 1000 * 60 * 60 * 24, // 1 day
+      accounts: [process.env.GOERLI_PRIVATE_KEY],
     },
     rinkeby: {
       url: process.env.RINKEBY,

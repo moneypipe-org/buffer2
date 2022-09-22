@@ -10,7 +10,7 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "owner",
+        "name": "deployer",
         "type": "address"
       },
       {
@@ -18,18 +18,6 @@
         "internalType": "address",
         "name": "group",
         "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "cid",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "title",
-        "type": "string"
       }
     ],
     "name": "ContractDeployed",
@@ -38,10 +26,34 @@
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "title",
-        "type": "string"
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
       },
+      {
+        "internalType": "uint256",
+        "name": "start",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "count",
+        "type": "uint256"
+      }
+    ],
+    "name": "find",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "bytes32",
         "name": "_root",
@@ -49,8 +61,18 @@
       },
       {
         "internalType": "bytes32",
-        "name": "_cid",
+        "name": "_cidDigest",
         "type": "bytes32"
+      },
+      {
+        "internalType": "bool",
+        "name": "_cidEncoding",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_index",
+        "type": "uint256"
       }
     ],
     "name": "genesis",

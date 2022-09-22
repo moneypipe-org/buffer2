@@ -4,20 +4,6 @@ const { expect } = require('chai')
 const Merklescript = require('merklescript')
 const path = require('path');
 const { ethers } = require('hardhat');
-const globalLogs = async (factoryAddress) => {
-  let ABI = require(path.resolve(__dirname, "../abi/contracts/Factory.sol/Factory.json"))
-  let interface = new ethers.utils.Interface(ABI)
-  let events = await ethers.provider.getLogs({
-    fromBlock: 0,
-    toBlock: 'latest',
-    address: factoryAddress,
-  }).then((events) => {
-    return events.map((e) => {
-      return interface.parseLog(e).args
-    })
-  })
-  return events;
-}
 class Engine {
   async init() {
     this.signers = await ethers.getSigners();
@@ -36,11 +22,14 @@ class Engine {
   }
   async clone (title, root) {
     let cidDigest = ipfsh.ctod("bafkreihe74ocygnwsmr7oao5zqrqzagb7e4j32xcmpjordz6wx5cngmmxm")
-    let tx = await this.factory.genesis(title, root, cidDigest)
+    let tx = await this.factory.genesis(root, cidDigest, false, 0)
     let r = await tx.wait()
-    let c = ipfsh.dtoc(r.events[0].args.cid)
-    let addr = r.events[0].args.group
-    let ABI = require(path.resolve(__dirname, "../abi/contracts/Buffer.sol/Buffer.json"))
+//    let c = ipfsh.dtoc(r.events[0].args.cid)
+//    let addr = r.events[0].args.group
+    let ABI = require(path.resolve(__dirname, "../abi/contracts/Buffer2.sol/Buffer2.json"))
+    let addrs = await this.factory.find(this.deployer.address, 0, 1)
+    let addr = addrs[0]
+    console.log("addr", addr)
     this.contract = new ethers.Contract(addr, ABI, this.signers[0])
     return this.contract;
   }
@@ -93,7 +82,8 @@ describe("splitter", () => {
     let tx = await buffer.withdraw(
       deployer.address,
       values[0][1],
-      script.proof([ deployer.address, values[0][1] ])
+      script.proof([ deployer.address, values[0][1] ]),
+      []
     )
     let r = await tx.wait()
     // Deployer's balance after withdraw 
@@ -112,6 +102,7 @@ describe("splitter", () => {
       alice.address,
       values[1][1],
       script.proof([ alice.address, values[1][1] ])
+      , []
     )
     r = await tx.wait()
     // Deployer's balance after withdraw 
@@ -130,6 +121,7 @@ describe("splitter", () => {
       bob.address,
       values[2][1],
       script.proof([ bob.address, values[2][1] ])
+      , []
     )
     r = await tx.wait()
     // Deployer's balance after withdraw 
@@ -181,6 +173,7 @@ describe("splitter", () => {
       deployer.address,
       50000000000,
       script.proof([ deployer.address, 50000000000 ])
+      , []
     )
     let r = await tx.wait()
 
@@ -228,6 +221,7 @@ describe("splitter", () => {
       deployer.address,
       50000000000,
       script.proof([ deployer.address, 50000000000 ])
+      , []
     )
     let r = await tx.wait()
 
@@ -263,6 +257,7 @@ describe("splitter", () => {
       deployer.address,
       50000000000,
       script.proof([ deployer.address, 50000000000 ])
+      , []
     )
     r = await tx.wait()
 
@@ -304,6 +299,7 @@ describe("splitter", () => {
       deployer.address,
       250000000000,
       script.proof([ deployer.address, 250000000000 ])
+      , []
     )
     let r = await tx.wait()
 
@@ -345,6 +341,7 @@ describe("splitter", () => {
       alice.address,
       250000000000,
       script.proof([ alice.address, 250000000000 ])
+      , []
     )
     r = await tx.wait()
 
@@ -374,6 +371,7 @@ describe("splitter", () => {
       bob.address,
       250000000000,
       script.proof([ bob.address, 250000000000 ])
+      , []
     )
     r = await tx.wait()
     let bobBalance2 = await ethers.provider.getBalance(bob.address)
@@ -389,6 +387,7 @@ describe("splitter", () => {
       alice.address,
       250000000000,
       script.proof([ alice.address, 250000000000 ])
+      , []
     )
     r = await tx.wait()
     let aliceBalance3 = await ethers.provider.getBalance(alice.address)
@@ -405,6 +404,7 @@ describe("splitter", () => {
       deployer.address,
       250000000000,
       script.proof([ deployer.address, 250000000000 ])
+      , []
     )
     r = await tx.wait()
     let deployerBalance5 = await ethers.provider.getBalance(deployer.address)
@@ -415,6 +415,224 @@ describe("splitter", () => {
         .add(ethers.utils.parseEther("4.0").div(4))
         .sub(r.gasUsed.mul(r.effectiveGasPrice))
     )
+
+  })
+  it("ERC20 split", async () => {
+    const Token = await ethers.getContractFactory("TestERC20")
+    const token = await Token.deploy(1000);
+    console.log("Token address:", token.address);
+    await token.deployed();
+
+    let ratio = [1,2,7]
+    let values = addresses.slice(0, 3).map((a, i) => {
+      return [a, Math.pow(10, 12) * ratio[i] / 10]
+    })
+    const script = new Merklescript({
+      types: ["address", "uint256"],
+      values
+    })
+    const key = script.root()
+
+    // create a buffer
+    let buffer = await engine.clone("test", key)
+
+    // becore transfer
+    let bufferTokenBalanceBefore = await token.balanceOf(buffer.address);
+    console.log("buffer balance before", bufferTokenBalanceBefore)
+    expect(bufferTokenBalanceBefore).to.equal("0")
+
+    // send all ERC20 to buffer
+    await token.transfer(buffer.address, 1000);
+
+    // after transfer
+    let bufferTokenBalanceAfter = await token.balanceOf(buffer.address);
+    console.log("buffer balance after", bufferTokenBalanceAfter)
+    expect(bufferTokenBalanceAfter).to.equal("1000")
+
+    // deployer withdraw
+    let deployerTokenBalanceBefore = await token.balanceOf(deployer.address);
+    console.log("deployer balance before", deployerTokenBalanceBefore)
+    expect(deployerTokenBalanceBefore).to.equal("0")
+    console.log("values", values)
+    let tx = await buffer.withdraw(
+      deployer.address,
+      values[0][1],
+      script.proof([ deployer.address, values[0][1] ]),
+      [ token.address ]
+    )
+    let r = await tx.wait()
+
+    // deployer balance should be 100
+    let deployerTokenBalanceAfter = await token.balanceOf(deployer.address);
+    console.log("deployer balance after", deployerTokenBalanceAfter)
+    expect(deployerTokenBalanceAfter).to.equal("100")
+
+
+    // buffer balance should be 900
+    let bufferTokenBalanceAfter2 = await token.balanceOf(buffer.address);
+    expect(bufferTokenBalanceAfter2).to.equal("900")
+    console.log("buffer balance after 2", bufferTokenBalanceAfter2)
+
+
+    // deployer try to withdraw again => balance should be the same because there's no additional tokens to withdraw
+    let tx2 = await buffer.withdraw(
+      deployer.address,
+      values[0][1],
+      script.proof([ deployer.address, values[0][1] ]),
+      [ token.address ]
+    )
+    let r2 = await tx2.wait()
+    console.log("X")
+
+    // deployer balance should be 100
+    deployerTokenBalanceAfter = await token.balanceOf(deployer.address);
+    console.log("deployer balance after 2", deployerTokenBalanceAfter)
+    expect(deployerTokenBalanceAfter).to.equal("100")
+    // buffer balance should be 900
+    let bufferTokenBalanceAfter3 = await token.balanceOf(buffer.address);
+    console.log("buffer balance after 3", bufferTokenBalanceAfter3)
+    expect(bufferTokenBalanceAfter3).to.equal("900")
+
+  })
+
+  it("continuous token injection", async () => {
+    const Token = await ethers.getContractFactory("TestERC20")
+    const token = await Token.deploy(1000);
+    console.log("Token address:", token.address);
+    await token.deployed();
+
+    let ratio = [1,2,7]
+    let values = addresses.slice(0, 3).map((a, i) => {
+      return [a, Math.pow(10, 12) * ratio[i] / 10]
+    })
+    const script = new Merklescript({
+      types: ["address", "uint256"],
+      values
+    })
+    const key = script.root()
+
+    // create a buffer
+    let buffer = await engine.clone("test", key)
+
+    // becore transfer
+    let bufferTokenBalanceBefore = await token.balanceOf(buffer.address);
+    console.log("buffer balance before", bufferTokenBalanceBefore)
+    expect(bufferTokenBalanceBefore).to.equal("0")
+
+    // send 100 ERC20 to buffer => deployer should now own 900 tokens, contract owns 100
+    await token.transfer(buffer.address, 100);
+
+    // buffer after transfer: 100
+    let bufferTokenBalanceAfter = await token.balanceOf(buffer.address);
+    expect(bufferTokenBalanceAfter).to.equal("100")
+
+    // deployer after transfer: 900
+    let deployerTokenBalanceAfter = await token.balanceOf(deployer.address);
+    expect(deployerTokenBalanceAfter).to.equal("900")
+
+    // deployer withdraw from buffer => deployer gets 10% of 100 -> now owns 900 + 10 = 910
+    let tx = await buffer.withdraw(
+      deployer.address,
+      values[0][1],
+      script.proof([ deployer.address, values[0][1] ]),
+      [ token.address ]
+    )
+    let r = await tx.wait()
+
+    // deployer balance should be 900 + 10 = 910
+    let balance2 = await token.balanceOf(deployer.address);
+    expect(balance2).to.equal("910")
+
+    // buffer balance should be 90
+    let balance3 = await token.balanceOf(buffer.address);
+    expect(balance3).to.equal("90")
+
+
+    // deployer try to withdraw again => balance should be the same because there's no additional tokens to withdraw
+    let tx2 = await buffer.withdraw(
+      deployer.address,
+      values[0][1],
+      script.proof([ deployer.address, values[0][1] ]),
+      [ token.address ]
+    )
+    let r2 = await tx2.wait()
+    console.log("X")
+
+    // nothing changed
+    // deployer balance should be 900 + 10 = 910
+    let balance4 = await token.balanceOf(deployer.address);
+    expect(balance4).to.equal("910")
+
+    // buffer balance should be 90
+    let balance5 = await token.balanceOf(buffer.address);
+    expect(balance5).to.equal("90")
+
+
+    // Now send some more tokens to contract
+    // send 610 ERC20 to buffer => deployer should now own 910 - 610 = 300 tokens, contract owns 90 + 610 = 700
+    await token.transfer(buffer.address, 610);
+
+    let balance6 = await token.balanceOf(deployer.address);
+    expect(balance6).to.equal("300")
+
+    // buffer balance should be 90
+    let balance7 = await token.balanceOf(buffer.address);
+    expect(balance7).to.equal("700")
+
+
+    // current balance of the buffer: 700
+    // but the total injection so far: 100 + 610 => 710
+    // Now withdraw again as deployer
+    // => Deployer should NOT get 700 * 10% (70)
+    // => instead Should get 710 * 10% - 10 = 71 - 10 = 61
+
+    let tx3 = await buffer.withdraw(
+      deployer.address,
+      values[0][1],
+      script.proof([ deployer.address, values[0][1] ]),
+      [ token.address ]
+    )
+    let r3 = await tx3.wait()
+
+    // the balance should be 300 + 61 = 361
+    let balance8 = await token.balanceOf(deployer.address);
+    console.log(balance8.toString())
+    expect(balance8).to.equal("361")
+
+    // buffer balance should be 700 - 61 = 639
+    let balance9 = await token.balanceOf(buffer.address);
+    console.log(balance9.toString())
+    expect(balance9).to.equal("639")
+
+
+    // Now try withdrawing as alice
+    // Alice should get (total injection * 20% = 710 * 20% = 142)
+    let alice = engine.signers[1]
+    let aliceBuffer = buffer.connect(alice)
+    let aliceBalanceBefore = await ethers.provider.getBalance(alice.address);
+    tx = await aliceBuffer.withdraw(
+      alice.address,
+      values[1][1],
+      script.proof([ alice.address, values[1][1] ]),
+      [ token.address ]
+    )
+    r = await tx.wait()
+
+    // the balance should be 300 + 61 = 361
+    let balance10 = await token.balanceOf(deployer.address);
+    console.log(balance10.toString())
+    expect(balance10).to.equal("361")
+
+    // alice balance should be 142
+    let balance12 = await token.balanceOf(alice.address);
+    console.log(balance12.toString())
+    expect(balance12).to.equal("142")
+
+    // buffer balance should be 639 - 142 = 497
+    let balance11 = await token.balanceOf(buffer.address);
+    console.log(balance11.toString())
+    expect(balance11).to.equal("497")
+
 
   })
 })
